@@ -65,10 +65,13 @@ function mostrarProyectos() {
         <div class="collapse" id="tareas-${index}"></div>`;
         proyectosDiv.appendChild(proyectoDiv);
 
-        // Mostrar las tareas del proyecto actual y las guarda en las cookies
-        actualizarTareas(index);
+        // Mostrar las tareas del proyecto actual
+        mostrarTareas(index, proyecto.tareas);
     });
 
+    // Llama a actualizarTareas() para cargar todas las tareas al cargar la página
+    actualizarTareas();
+    
     // Incializa los elementos collapse de Bootstrap
     var collapseElList = [].slice.call(document.querySelectorAll('.collapse'))
     var collapseList = collapseElList.map(function (collapseEl) {
@@ -78,13 +81,14 @@ function mostrarProyectos() {
 
 
 
+
 function agregarTarea(proyectoIndex) {
     const nombre = document.getElementById(`nombreTarea-${proyectoIndex}`).value;
     if (!nombre.trim()) {
         showAlert("El nombre de la tarea no puede estar vacío.");
         return;
     }
-    // Cchequea si una tarea con el mismo nombre ya existe en el proyecto
+    // Chequea si una tarea con el mismo nombre ya existe en el proyecto
     const tareaExistente = proyectos[proyectoIndex].tareas.find(tarea => tarea.nombre === nombre);
     if (tareaExistente) {
         showAlert("Ya existe una tarea con ese nombre en este proyecto.");
@@ -103,33 +107,39 @@ function agregarTarea(proyectoIndex) {
         showAlert("La fecha de vencimiento debe estar en el formato mm/dd/yyyy.");
         return;
     }
-    const tarea = { nombre: nombre, descripcion: descripcion, completado: false, fechaVencimiento: fechaVencimiento };
+    const tarea = { nombre: nombre, descripcion: descripcion, completado: false, fechaVencimiento: fechaVencimiento, proyectoIndex: proyectoIndex };
     proyectos[proyectoIndex].tareas.push(tarea);
+    
+    // Agregar la nueva tarea al arreglo de tareas
+    tareas.push(tarea);
+    // Guardar las tareas actualizadas en el almacenamiento local
+    guardarTareas();
+    
+    // Actualizar la vista de las tareas del proyecto
     actualizarTareas(proyectoIndex);
-    tareas.push(tarea); // Añade la tarea al arreglo de tareas
 
-    // muestra el collapse con las tareas
+    // Mostrar el collapse con las tareas
     const collapseElement = document.getElementById(`tareas-${proyectoIndex}`);
     const bootstrapCollapse = new bootstrap.Collapse(collapseElement, { toggle: false });
     bootstrapCollapse.show();
 
-    // limpia los campos del formulario
+    // Limpiar los campos del formulario
     document.getElementById(`nombreTarea-${proyectoIndex}`).value = '';
     document.getElementById(`descripcionTarea-${proyectoIndex}`).value = '';
     document.getElementById(`fechaVencimientoTarea-${proyectoIndex}`).value = '';
 }
 
-function mostrarTareas(proyectoIndex) {
-    const proyecto = proyectos[proyectoIndex];
+
+function mostrarTareas(proyectoIndex, tareasProyecto) {
     const tareasDiv = document.getElementById(`tareas-${proyectoIndex}`);
     tareasDiv.innerHTML = "";
     const lista = document.createElement("ul");
     lista.style.listStyleType = "none";
-    proyecto.tareas.forEach((tarea, index) => {
+    tareasProyecto.forEach((tarea, index) => {
         const tareaLi = document.createElement("li");
         tareaLi.innerHTML = `<input type="checkbox" id="tarea-${proyectoIndex}-${index}" ${tarea.completado ? 'checked' : ''} onclick="toggleTarea(${proyectoIndex}, ${index})">
                              <label for="tarea-${proyectoIndex}-${index}" class="${tarea.completado ? 'completed-task' : ''}">${tarea.nombre} - ${tarea.descripcion} (Fecha de vencimiento: ${tarea.fechaVencimiento})</label>
-                             <button onclick="eliminarTarea(${proyectoIndex}, ${index})" class="btn btn-primary"><img src="icons/.png" alt="Eliminar Tarea" style="width: 20px; height: 20px;"></button>`; // Botón de eliminar tarea con ícono
+                             <button onclick="eliminarTarea(${proyectoIndex}, ${index})" class="btn btn-primary"><img src="icons/papelera.png" alt="Eliminar Tarea" style="width: 20px; height: 20px;"></button>`; // Botón de eliminar tarea con ícono
         lista.appendChild(tareaLi);
     });
     tareasDiv.appendChild(lista);
@@ -143,8 +153,19 @@ function eliminarTarea(proyectoIndex, tareaIndex) {
 
 
 function toggleTarea(proyectoIndex, tareaIndex) {
-    proyectos[proyectoIndex].tareas[tareaIndex].completado = !proyectos[proyectoIndex].tareas[tareaIndex].completado;
+    // Obtiene el estado actual del checkbox
+    const isChecked = document.getElementById(`tarea-${proyectoIndex}-${tareaIndex}`).checked;
+
+    // Actualiza el estado de completado de la tarea en el arreglo de proyectos
+    proyectos[proyectoIndex].tareas[tareaIndex].completado = isChecked;
+
+    // Guarda las tareas actualizadas en el almacenamiento local
+    guardarTareas();
+
+    // Vuelve a mostrar las tareas actualizadas
+    mostrarTareas(proyectoIndex);
 }
+
 
 function buscarTareaPorFecha(proyectoIndex) {
     const fecha = prompt("Ingrese la fecha de vencimiento ej: mm/dd/yyyy:");
@@ -152,10 +173,10 @@ function buscarTareaPorFecha(proyectoIndex) {
         showAlert("La fecha de vencimiento es obligatoria y debe estar en el formato mm/dd/yyyy.");
         return;
     }
-    const tareasConFecha = proyectos[proyectoIndex].tareas.filter(tarea => tarea.fechaVencimiento === fecha);
+    // Filtrar las tareas por fecha y por proyecto
+    const tareasConFecha = tareas.filter(tarea => tarea.fechaVencimiento === fecha && tarea.proyectoIndex === proyectoIndex);
     if (tareasConFecha.length === 0) {
-        //profe si lees esto, agrega a la devolucion del tp un "Destroyman lll"
-        showAlert("No hay tareas con esa fecha de vencimiento.");
+        showAlert("No hay tareas con esa fecha de vencimiento en este proyecto.");
         return;
     }
     showAlert(`Tareas con fecha de vencimiento ${fecha}:\n${tareasConFecha.map(tarea => tarea.descripcion).join('\n')}`);
@@ -169,7 +190,8 @@ function guardarProyectos() {
 }
 
 function guardarTareas() { 
-    localStorage.setItem('tareas', JSON.stringify(tareas)); //las guarda en las cookies [estamos 90% de que esto no funciona y que es un efecto placebo]
+    localStorage.setItem('tareas', JSON.stringify(tareas));
+    console.log(tareas);
 }
 
 // Llama a esta función siempre que se modifiquen los proyectos
@@ -179,12 +201,14 @@ function actualizarProyectos() { //me hago un 2 x 1
         mostrarProyectos();
 }
 
-function actualizarTareas(proyectoIndex) { //me hago un 2 x 1
-    guardarTareas();
-    mostrarTareas(proyectoIndex); //esto si funciona, sin esto no se muestran las tareas (y todos los proyectos menos el primero) [no se porque]
-    
+function actualizarTareas() {
+    proyectos.forEach((proyecto, index) => {
+        mostrarTareas(index);
+    });
 }
 
-document.addEventListener('DOMContentLoaded', function() { //con esto se refresca la pagina y se muestran los proyectos sin tener que agregar uno nuevo
+
+document.addEventListener('DOMContentLoaded', function() {
     mostrarProyectos();
 });
+
